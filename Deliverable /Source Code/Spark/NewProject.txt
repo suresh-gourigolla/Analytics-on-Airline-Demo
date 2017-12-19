@@ -1,0 +1,137 @@
+import org.apache.spark._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.functions
+import com.datastax.spark.connector.cql.CassandraConnector
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.functions._
+
+object airRoute {
+  def main(args: Array[String]): Unit = {
+
+    val conf= new SparkConf().setMaster("local[*]").set("spark.cassandra.connection.host","127.0.0.1")
+    //val conf = new SparkConf(true).set("spark.cassandra.connection.host","127.0.0.1")
+    val sc = new SparkContext(conf)
+
+    //val sqlContext= new org.apache.spark.sql.SQLContext(sc)
+
+    //val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val hiveContext = new HiveContext(sc)
+    println(" Connecting to HIVE... Please wait for a moment... ")
+
+    /*    val df_routes=hiveContext.sql("select * from Open_Flight.airline_route_tbl");
+        val df_airports=hiveContext.sql("select * from Open_Flight.airline_airport_tbl");
+        val df_airline=hiveContext.sql("select * from Open_Flight.airline_airline_tbl");
+        val df_cargo=hiveContext.sql("select * from SFO_airport_system.SFO_Cargo_Data_Tbl");
+        val df_passengers=hiveContext.sql("select * from SFO_airport_system.SFO_passenger_Data_Tbl");
+        val df_landing=hiveContext.sql("select * from SFO_airport_system.SFO_Landing_Data_Tbl");*/
+
+    //List of airports operating in the country
+    val AirportDF = "select country, collect_set(name) as list_of_airports from Open_Flight.airline_airport_tbl GROUP BY country"
+    val airport = hiveContext.sql(AirportDF).withColumn("uniqueid", monotonically_increasing_id())
+    airport.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "airport", "keyspace" -> "openflight")).save()
+
+
+    //List of airlines having zero stops
+    val zerostopsDF="""select al.airline_id as airline_id,al.name as name,al.alias as alias,al.airline_iata_code as iata_code,al.airline_icao_code as icao_code,al.active,al.country as country,r.airline as airline,r.source_airport as source_airport,r.source_airport_id as source_airport_id,r.destination_airport as destination_airport,r.destination_airport_id as destination_airport_id,r.stops as stops from open_flight.airline_airline_tbl al,open_flight.airline_route_tbl r where al.airline_id=r.airline_id and r.stops=0"""
+    val zerostops = hiveContext.sql(zerostopsDF).withColumn("uniqueid", monotonically_increasing_id())
+    zerostops.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "zerostops", "keyspace" -> "openflight")).save()
+
+    //List of airlines operating with code share
+    val codeshareDF = """select al.airline_id as airline_id,al.name as name,al.alias as alias,al.airline_iata_code as iata_code,al.airline_icao_code as icao_code,al.active as active,al.country as country,r.airline as airline,r.source_airport as source_airport,r.source_airport_id as source_airport_id,r.destination_airport as destination_airport,r.destination_airport_id as destination_airport_id,r.stops as stops,r.codeshare as codeshare from open_flight.airline_airline_tbl as al, open_flight.airline_route_tbl as r where al.airline_id = r.airline_id and r.stops = 0 and r.codeshare IN ('Y ','N ')"""
+    val codeshare = hiveContext.sql(codeshareDF).withColumn("uniqueid", monotonically_increasing_id())
+    codeshare.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "codeshare", "keyspace" -> "openflight")).save()
+
+    //List highest airports in each country
+    val highestairportDF = """select ap.airport_id as airport_id,ap.name as name,ap.city as city,ap.airline_iata_code as iata_code,ap.airline_icao_Code as icao_code,ap.latitude as latitude,ap.longitude as longitude,ap.altitude as altitude,ap.timezone as timezone,ap.dst as dst,ap.tz_database_time_zone as tz_database_time_zone,ap.type as type,t.country as country,t.airport_count as airport_count from open_flight.airline_airport_tbl ap join (SELECT country as country, count(*) as airport_count FROM open_flight.airline_airport_tbl GROUP BY country) as t on t.country=ap.country ORDER BY ap.airport_id ASC"""
+    val highestairports = hiveContext.sql(highestairportDF).withColumn("uniqueid", monotonically_increasing_id())
+    highestairports.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "highestairports", "keyspace" -> "openflight")).save()
+
+    //List of active airlines in the United States etc
+    val activeAirlinesDF = """select al.airline_id as airline_id,al.alias as alias,al.airline_iata_code as iata_code,al.airline_icao_code as icao_code,al.callsign as callsign,al.active as active,x.country as country,x.airline_name as airline_name from open_flight.airline_airline_tbl al join (select country ,collect_set(name) as airline_name from open_flight.airline_airline_tbl where active in ('Y') GROUP BY country) x on x.country = al.country and al.active in ('Y')"""
+    val activeairlines = hiveContext.sql(activeAirlinesDF).withColumn("uniqueid", monotonically_increasing_id())
+    activeairlines.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "activeairlines", "keyspace" -> "openflight")).save()
+
+    //List of airlines operated at given airport
+    val airlinesOperatedDF = """select ap.airport_id as airport_id,ap.country as country,y.airport_name as airport_name,y.airlines_list as airlines_list from open_flight.airline_airport_tbl ap join (select b.name as airport_name,collect_set(a.name) as airlines_list from open_flight.airline_airline_tbl a,Open_Flight.airline_airport_tbl b where a.country = b.country GROUP BY b.name) y on y.airport_name = ap.name """
+    val airlinesoperated=hiveContext.sql(airlinesOperatedDF).withColumn("uniqueid", monotonically_increasing_id())
+    airlinesoperated.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "airlinesoperated", "keyspace" -> "openflight")).save()
+
+    //List of airlines operated in most of the oountries
+    val airlinesOperatedinCountriesDF = """select country,collect_set(name) as airlines_list from open_flight.airline_airline_tbl GROUP BY country"""
+    val airlinesoperatedincountries = hiveContext.sql(airlinesOperatedinCountriesDF).withColumn("uniqueid", monotonically_increasing_id())
+    airlinesoperatedincountries.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "airlinesoperatedincountries", "keyspace" -> "openflight")).save()
+
+    //List the airlines operates in most routes and least routes
+    val listAirlineRoutesDF = """select al.name as airline_name,r.airline_id as airline_id ,collect_set (r.Source_airport) as source_airport,collect_set(r.destination_airport) as destination_airport,count(*) as count from open_flight.airline_airline_tbl al join open_flight.airline_route_tbl r on al.airline_id = r.airline_id GROUP BY al.name,r.airline_id ORDER BY count desc"""
+    val listairlineroutes = hiveContext.sql(listAirlineRoutesDF).withColumn("uniqueid", monotonically_increasing_id())
+    listairlineroutes.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "listairlineroutes", "keyspace" -> "openflight")).save()
+
+    //List the total number of passengers travelled by year
+    val numberofPassengersDF = "select year, SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_Data_tbl GROUP BY year"
+    val passengersbyyear = hiveContext.sql(numberofPassengersDF).withColumn("uniqueid", monotonically_increasing_id())
+    passengersbyyear.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "passengersbyyear", "keyspace" -> "sfo_airport")).save()
+
+    //List total no of passenger by month for particular year per geo_region
+    val passengersbymonthDF = """select year as year,month as month,geo_region as geo_region,SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_data_tbl GROUP BY year,month,geo_region"""
+    val passengersbymonth = hiveContext.sql(passengersbymonthDF).withColumn("uniqueid", monotonically_increasing_id())
+    passengersbymonth.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "passengersbymonth", "keyspace" -> "sfo_airport")).save()
+
+    //List total passenger count by geo_region
+    val passengersbygeoregionDF = """select geo_region as geo_region, SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_data_tbl GROUP BY geo_region"""
+    val passengersbygeoregion = hiveContext.sql(passengersbygeoregionDF).withColumn("uniqueid", monotonically_increasing_id())
+    passengersbygeoregion.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "passengersbygeoregion", "keyspace" -> "sfo_airport")).save()
+
+    //List total passenger count by operating airline
+    val passengersbyairlineDF = "select operating_airline, SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_Data_tbl GROUP BY operating_airline"
+    val passengersbyairline = hiveContext.sql(passengersbyairlineDF).withColumn("uniqueid", monotonically_increasing_id())
+    passengersbyairline.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "passengersbyairline", "keyspace" -> "sfo_airport")).save()
+
+    //List total passenger count by operating airline per month in a year
+    val PassengerAirlineDF = """select year,month,operating_airline,SUM(Passenger_Count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_data_tbl GROUP BY year,month,operating_airline"""
+    val passengerairline = hiveContext.sql(PassengerAirlineDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    passengerairline.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "passengerairline", "keyspace" -> "sfo_airport")).save()
+
+
+    //List total landed weight by year
+    val landedweightbyyearDF = """select year,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY year"""
+    val landedweightbyyear = hiveContext.sql(landedweightbyyearDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    landedweightbyyear.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "landedweightbyyear", "keyspace" -> "sfo_airport")).save()
+
+    //List total landed weight by month for particular year per geo_region
+    val landedWeightDF = """select year,month,geo_region,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY year,month,geo_Region"""
+    val landedweight = hiveContext.sql(landedWeightDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    landedweight.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "landedweight", "keyspace" -> "sfo_airport")).save()
+
+    //List total landed weight by geo_region
+    val landedweightbygeoregionDF = """select geo_region,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY geo_region"""
+    val landedweightbygeoregion = hiveContext.sql(landedweightbygeoregionDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    landedweightbygeoregion.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "landedweightbygeoregion", "keyspace" -> "sfo_airport")).save()
+
+    //List total landed weight by operating airline, aircraft manufacture per year
+    val WeightByAircraftDF = """select year,month,operating_airline,aircraft_manufacturer,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY year,month,operating_airline,aircraft_manufacturer"""
+    val weightbyaircraft = hiveContext.sql(WeightByAircraftDF).withColumn("uniqueid", monotonically_increasing_id())
+    weightbyaircraft.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "weightbyaircraft", "keyspace" -> "sfo_airport")).save()
+
+    //List total cargo metric tons by year.
+    val cargobyYearDF = """select year, SUM(cargo_metric_tons) as total_cargo_metric_tons from sfo_airport_system.sfo_cargo_data_tbl GROUP BY year"""
+    val cargobyyear = hiveContext.sql(cargobyYearDF).withColumn("uniqueid", monotonically_increasing_id())
+    cargobyyear.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "cargobyyear", "keyspace" -> "sfo_airport")).save()
+
+    //List total cargo metric tons by month for particular year per geo_region
+    val CargoMetricTonsDF = """select year,month,geo_region,SUM(cargo_metric_tons) as total_cargo_metric_tons from sfo_airport_system.sfo_cargo_data_tbl GROUP BY year,month,geo_region"""
+    val cargometrictons = hiveContext.sql(CargoMetricTonsDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    cargometrictons.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "cargometrictons", "keyspace" -> "sfo_airport")).save()
+
+    //List total cargo metric tons by geo_region
+    val cargobygeoregionDF = """select geo_region,SUM(cargo_metric_tons) as total_cargo_metric_tons from sfo_airport_system.sfo_Cargo_Data_Tbl GROUP BY geo_region"""
+    val cargobygeoregion = hiveContext.sql(cargobygeoregionDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    cargobygeoregion.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "cargobygeoregion", "keyspace" -> "sfo_airport")).save()
+
+    //List total cargo metric tons by operating airline
+    val CargoMetricTonsByAirlineDF = """select year,month,operating_airline,SUM(cargo_metric_tons) as total_cargo_metric_tons from SFO_airport_system.SFO_Cargo_Data_Tbl GROUP BY year,month,operating_airline"""
+    val cargometrictonsbyairline = hiveContext.sql(CargoMetricTonsByAirlineDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+    cargometrictonsbyairline.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "cargometrictonsbyairline", "keyspace" -> "sfo_airport")).save()
+
+  }
+}

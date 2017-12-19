@@ -1,0 +1,180 @@
+Open_Flight database:
+####################
+add jar hdfs://sandbox.hortonworks.com:8020/hdp/apps/2.5.0.0-1245/hive/csv-serde-1.1.2.jar;
+Airport:
+********
+CREATE TABLE IF NOT EXISTS Airline_Airport_Tbl_txt (
+Airport_ID INT
+,Name VARCHAR(50)
+,City VARCHAR(50)
+,Country  VARCHAR(25)
+,Airline_IATA_Code VARCHAR(5)
+,Airline_ICAO_Code VARCHAR(5)
+,Latitude DECIMAL(38,20) 
+,Longitude DECIMAL(38,20)
+,Altitude INT
+,Timezone INT
+,DST CHAR(2)
+,Tz_database_time_zone VARCHAR(25)
+,Type VARCHAR(25)
+,Source VARCHAR(25))
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/';
+
+LOAD DATA INPATH '/hdp/airports.csv' OVERWRITE INTO TABLE Airline_Airport_Tbl_txt;
+
+CREATE TABLE IF NOT EXISTS airline_airport_tbl(
+Airport_ID INT
+,Name VARCHAR(50)
+,City VARCHAR(50)
+,Airline_IATA_Code VARCHAR(5)
+,Airline_ICAO_Code VARCHAR(5)
+,Latitude DECIMAL(20,15)
+,Longitude DECIMAL(20,15)
+,Altitude INT
+,Timezone INT
+,DST CHAR(2)
+,Tz_database_time_zone VARCHAR(25)
+,Type VARCHAR(25)
+,Source VARCHAR(25))
+PARTITIONED BY(Country VARCHAR(25))
+CLUSTERED BY(City) INTO 32 BUCKETS
+STORED AS RCFILE
+LOCATION '/user/susham/Hive/Airport' ;
+
+set hive.execution.engine=tez;
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+set hive.enforce.bucketing = true; 
+set hive.exec.max.dynamic.partitions.pernode=10000;
+set hive.exec.max.dynamic.partitions=10000
+
+insert overwrite table airline_airport_tbl PARTITION (country) select Airport_ID 
+,Name
+,City
+,Airline_IATA_Code
+,Airline_ICAO_Code
+,Latitude
+,Longitude
+,Altitude
+,Timezone
+,DST
+,Tz_database_time_zone
+,Type
+,Source
+,Country
+from airline_airport_tbl_txt; 
+
+Airline:
+==============================
+
+
+CREATE TABLE IF NOT EXISTS Airline_Airline_Tbl_txt (
+Airline_ID INT
+,Name STRING
+,Alias STRING
+,Airline_IATA_Code  VARCHAR(5)
+,Airline_ICAO_Code VARCHAR(5)
+,Callsign VARCHAR(50) 
+,Country STRING
+,ACTIVE CHAR(1)
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/';
+
+LOAD DATA INPATH '/hdp/airlines.csv' OVERWRITE INTO TABLE Airline_Airline_Tbl_txt;
+
+CREATE TABLE IF NOT EXISTS airline_airline_tbl(
+Airline_ID INT
+,Name STRING
+,Alias STRING
+,Airline_IATA_Code  VARCHAR(5)
+,Airline_ICAO_Code VARCHAR(5)
+,Callsign VARCHAR(50) 
+,ACTIVE CHAR(1))
+PARTITIONED BY(Country STRING)
+CLUSTERED BY(Airline_ID) INTO 32 BUCKETS
+STORED AS RCFILE
+LOCATION '/user/susham/Hive/Airlines'; 
+
+
+set hive.execution.engine=tez;
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+set hive.enforce.bucketing = true; 
+set hive.exec.max.dynamic.partitions.pernode=10000;
+set hive.exec.max.dynamic.partitions=10000
+
+insert overwrite table airline_airline_tbl PARTITION (country) select Airline_ID
+,Name 
+,Alias 
+,Airline_IATA_Code
+,Airline_ICAO_Code
+,Callsign 
+,ACTIVE
+,Country
+from Airline_Airline_Tbl_txt;
+
+Routes:
+--------
+CREATE TABLE IF NOT EXISTS Airline_route_Tbl_txt (
+Airline VARCHAR(5)
+,Airline_ID INT
+,Source_airport VARCHAR(5)
+,Source_airport_ID  INT
+,Destination_airport VARCHAR(5)
+,Destination_airport_ID INT 
+,Codeshare CHAR(2)
+,Stops INT
+,Equipment CHAR(4)
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/';
+
+LOAD DATA INPATH '/hdp/routes.txt' OVERWRITE INTO TABLE Airline_route_Tbl_txt;
+
+
+CREATE TABLE IF NOT EXISTS airline_route_tbl(
+Airline VARCHAR(5)
+,Airline_ID INT
+,Source_airport VARCHAR(5)
+,Source_airport_ID  INT
+,Destination_airport VARCHAR(5)
+,Destination_airport_ID INT 
+,Codeshare CHAR(2)
+,Stops INT
+,Equipment CHAR(4))
+STORED AS RCFILE
+LOCATION '/user/susham/Hive/Routes'; 
+
+insert overwrite table airline_route_tbl select Airline
+,Airline_ID
+,Source_airport 
+,Source_airport_ID
+,Destination_airport
+,Destination_airport_ID 
+,Codeshare
+,Stops
+,Equipment
+from Airline_route_Tbl_txt;
+
+
+

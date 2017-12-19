@@ -1,0 +1,418 @@
+
+//a) List of airports operating in the country 
+
+import org.apache.spark._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.functions
+import com.datastax.spark.connector.cql.CassandraConnector
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.functions._
+
+sc.stop()
+val conf= new SparkConf().setMaster("local[*]").set("spark.cassandra.connection.host","127.0.0.1")
+val sc = new SparkContext(conf)
+
+val hiveContext = new HiveContext(sc)
+val AirportDF = "select country, collect_set(name) as list_of_airports from Open_Flight.airline_airport_tbl GROUP BY country"
+val airport = hiveContext.sql(AirportDF).withColumn("uniqueid", monotonically_increasing_id())
+airport.show(20)
++-----------------+--------------------+
+|          country|        Airport_list|
++-----------------+--------------------+
+|           Cyprus|[Larnaca Internat...|
+|       Luxembourg|[Luxembourg-Finde...|
+|         Bulgaria|[Graf Ignatievo A...|
+|    Guinea-Bissau|[Bubaque Airport,...|
+|         Thailand|[Mae Hong Son Air...|
+|       Micronesia|[Pohnpei Internat...|
+|             Guam|[Andersen Air For...|
+|          Iceland|[Selfoss Airport,...|
+|          Lesotho|[Mejametalana Air...|
+|           Brunei|[Brunei Internati...|
+|           Mexico|[Captain 	Rogelio ...|
+|Wallis and Futuna|[Pointe Vele Airp...|
+|          Denmark|[Ærø Airport, Her...|
+|            Egypt|[Marsa Alam Inter...|
+|          Namibia|[Ondangwa Airport...|
+|           Serbia|[Belgrade Nikola ...|
+|        Guatemala|[La Aurora Airpor...|
+|            India|[Ratnagiri Airpor...|
+|           Tuvalu|[Funafuti Interna...|
+|         Barbados|[Sir Grantley Ada...|
++-----------------+--------------------+
+OR 
+val AirportDF= "select country , concat_ws(",", collect_list(name)) from openflight.airline_airport_tbl GROUP BY country" 
+
++-----------------+--------------------+
+|          country|                 _c1|
++-----------------+--------------------+
+|           Cyprus|Larnaca Internati...|
+|       Luxembourg|Luxembourg-Findel...|
+|         Bulgaria|Graf Ignatievo Ai...|
+|    Guinea-Bissau|Bubaque Airport,O...|
+|         Thailand|Mae Hong Son Airp...|
+|       Micronesia|Pohnpei Internati...|
+|             Guam|Andersen Air Forc...|
+|          Iceland|Selfoss Airport,T...|
+|          Lesotho|Mejametalana Airb...|
+|           Brunei|Brunei Internatio...|
+|           Mexico|Captain Rogelio C...|
+|Wallis and Futuna|Pointe Vele Airpo...|
+|          Denmark|Ærø Airport,Herni...|
+|            Egypt|Marsa Alam Intern...|
+|          Namibia|Ondangwa Airport,...|
+|           Serbia|Belgrade Nikola T...|
+|        Guatemala|La Aurora Airport...|
+|            India|Ratnagiri Airport...|
+|           Tuvalu|Funafuti Internat...|
+|         Barbados|Sir Grantley Adam...|
++-----------------+--------------------+
+
+
+
+
+//b) List of airlines having zero stops 
+
+val zerostopsDF="""select al.airline_id as airline_id,al.name as name,al.alias as alias,al.airline_iata_code as iata_code,al.airline_icao_code as icao_code,al.active,al.country as country,r.airline as airline,r.source_airport as source_airport,r.source_airport_id as source_airport_id,r.destination_airport as destination_airport,r.destination_airport_id as destination_airport_id,r.stops as stops from open_flight.airline_airline_tbl al,open_flight.airline_route_tbl r where al.airline_id=r.airline_id and r.stops=0"""
+val zerostops = hiveContext.sql(zerostopsDF).withColumn("uniqueid", monotonically_increasing_id())
+zerostops.show(20)
+
++----------+--------------+-----+-----------------+-----------------+------+--------------------+-------+--------------+-----------------+-------------------+----------------------+-----+
+|airline_id|          name|alias|airline_iata_code|airline_icao_code|active|             country|airline|source_airport|source_airport_id|destination_airport|destination_airport_id|stops|
++----------+--------------+-----+-----------------+-----------------+------+--------------------+-------+--------------+-----------------+-------------------+----------------------+-----+
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           ADL|             3341|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           AKL|             2006|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           AMS|              580|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           ATH|             3941|                DOH|                 11051|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           ATL|             3682|                ORD|                  3830|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           AUH|             2179|                BAH|                  2057|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BAH|             2057|                DXB|                  2188|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BCN|             1218|                DOH|                 11051|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKI|             3269|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKK|             3885|                CMB|                  3024|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKK|             3885|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKK|             3885|                KBV|                  3174|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKK|             3885|                KHI|                  2206|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BKK|             3885|                SIN|                  3316|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BLR|             3131|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BNE|             3320|                CNS|                  3322|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BNE|             3320|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           BOM|             2997|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           CAN|             3370|                HKG|                  3077|    0|
+|      1680|Cathay Pacific|    N|               CX|              CPA| Y    |Hong Kong SAR of ...|     CX|           CCU|             3043|                HKG|                  3077|    0|
++----------+--------------+-----+-----------------+-----------------+------+--------------------+-------+--------------+-----------------+-------------------+----------------------+-----+
+
+//c) List of airlines operating with code share 
+
+val codeshareDF = """select al.airline_id as airline_id,al.name as name,al.alias as alias,al.airline_iata_code as iata_code,al.airline_icao_code as icao_code,al.active as active,al.country as country,r.airline as airline,r.source_airport as source_airport,r.source_airport_id as source_airport_id,r.destination_airport as destination_airport,r.destination_airport_id as destination_airport_id,r.stops as stops,r.codeshare as codeshare from open_flight.airline_airline_tbl as al, open_flight.airline_route_tbl as r where al.airline_id = r.airline_id and r.stops = 0 and r.codeshare IN ('Y ','N ')"""
+
+val codeshare = hiveContext.sql(codeshareDF).withColumn("uniqueid", monotonically_increasing_id())
+
+codeshare.show(20)
+
++----------+-----------------+-----+-----------------+-----------------+------+-------+-------+--------------+-----------------+-------------------+----------------------+-----+---------+
+|airline_id|             name|alias|airline_iata_code|airline_icao_code|active|country|airline|source_airport|source_airport_id|destination_airport|destination_airport_id|stops|codeshare|
++----------+-----------------+-----+-----------------+-----------------+------+-------+-------+--------------+-----------------+-------------------+----------------------+-----+---------+
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           AMM|             2170|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           AMS|              580|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           ARN|              737|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           ATH|             3941|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           AYT|             1688|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BCN|             1218|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BEG|             1739|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BLQ|             1538|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BRU|              302|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BSL|             1423|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           BUD|             1489|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CAI|             1128|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CDG|             1382|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CGN|              344|                KLU|                  4322|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CGN|              344|                SZG|                  1612|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CGN|              344|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CHQ|             1474|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CLJ|             1652|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CPH|              609|                VIE|                  1613|    0|        Y|
+|       491|Austrian Airlines|    N|               OS|              AUA| Y    |Austria|     OS|           CTA|             1509|                VIE|                  1613|    0|        Y|
++----------+-----------------+-----+-----------------+-----------------+------+-------+-------+--------------+-----------------+-------------------+----------------------+-----+---------+
+
+
+
+//d) List highest airports in each country 
+
+val highestairportDF = """select ap.airport_id as airport_id,ap.name as name,ap.city as city,ap.airline_iata_code as iata_code,ap.airline_icao_Code as icao_code,ap.latitude as latitude,ap.longitude as longitude,ap.altitude as altitude,ap.timezone as timezone,ap.dst as dst,ap.tz_database_time_zone as tz_database_time_zone,ap.type as type,t.country as country,t.airport_count as airport_count from open_flight.airline_airport_tbl ap join (SELECT country as country, count(*) as airport_count FROM open_flight.airline_airport_tbl GROUP BY country) as t on t.country=ap.country ORDER BY ap.airport_id ASC"""
+
+val highestairports = hiveContext.sql(highestairportDF).withColumn("uniqueid", monotonically_increasing_id())
+
+highestairports.show(20)
+
++----------+--------------------+--------------+-----------------+-----------------+------------------+-------------------+--------+--------+---+---------------------+-------+----------------+-------------+
+|airport_id|                name|          city|airline_iata_code|airline_icao_code|          latitude|          longitude|altitude|timezone|dst|tz_database_time_zone|   type|         country|airport_count|
++----------+--------------------+--------------+-----------------+-----------------+------------------+-------------------+--------+--------+---+---------------------+-------+----------------+-------------+
+|         1|      Goroka Airport|        Goroka|              GKA|             AYGA|-6.081689834590001|145.391998291000000|    5282|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         2|      Madang Airport|        Madang|              MAG|             AYMD|-5.207079887390000|145.789001465000000|      20|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         3|Mount Hagen Kagam...|   Mount Hagen|              HGU|             AYMH|-5.826789855957031|144.296005249023440|    5388|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         4|      Nadzab Airport|        Nadzab|              LAE|             AYNZ|-6.569803000000000|146.725977000000000|     239|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         5|Port Moresby Jack...|  Port Moresby|              POM|             AYPY|-9.443380355834961|147.220001220703120|     146|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         6|Wewak Internation...|         Wewak|              WWK|             AYWK|-3.583830118180000|143.669006348000000|      19|      10| U | Pacific/Port_Moresby|airport|Papua New Guinea|           26|
+|         7|  Narsarsuaq Airport|  Narssarssuaq|              UAK|             BGBW|61.160499572800000|-45.425998687700000|     112|      -3| E |      America/Godthab|airport|       Greenland|           22|
+|         8|Godthaab / Nuuk A...|      Godthaab|              GOH|             BGGH|64.190902710000000|-51.678100585900000|     283|      -3| E |      America/Godthab|airport|       Greenland|           22|
+|         9|Kangerlussuaq Air...|   Sondrestrom|              SFJ|             BGSF|67.012221899200000|-50.711603164700000|     165|      -3| E |      America/Godthab|airport|       Greenland|           22|
+|        10|      Thule Air Base|         Thule|              THU|             BGTL|76.531196594200000|-68.703201293900000|     251|      -4| E |        America/Thule|airport|       Greenland|           22|
+|        11|    Akureyri Airport|      Akureyri|              AEY|             BIAR|65.660003662109380|-18.072700500488280|       6|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        12| Egilsstaðir Airport|   Egilsstadir|              EGS|             BIEG|65.283302307128900|-14.401399612426758|      76|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        13|Hornafjörður Airport|          Hofn|              HFN|             BIHN|64.295601000000000|-15.227200000000000|      24|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        14|     Húsavík Airport|       Husavik|              HZK|             BIHU|65.952301000000000|-17.426001000000000|      48|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        15|  Ísafjörður Airport|    Isafjordur|              IFJ|             BIIS|66.058097839355470|-23.135299682617188|       8|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        16|Keflavik Internat...|      Keflavik|              KEF|             BIKF|63.985000610352000|-22.605600357056000|     171|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        17|Patreksfjörður Ai...|Patreksfjordur|              PFJ|             BIPA|65.555801000000000|-23.965000000000000|      11|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        18|   Reykjavik Airport|     Reykjavik|              RKV|             BIRK|64.129997253400000|-21.940599441500000|      48|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        19|Siglufjörður Airport|  Siglufjordur|              SIJ|             BISI|66.133301000000000|-18.916700000000000|      10|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
+|        20|Vestmannaeyjar Ai...|Vestmannaeyjar|              VEY|             BIVM|63.424301147460940|-20.278900146484375|     326|       0| N |   Atlantic/Reykjavik|airport|         Iceland|           20|
++----------+--------------------+--------------+-----------------+-----------------+------------------+-------------------+--------+--------+---+---------------------+-------+----------------+-------------+
+
+
+
+
+//e) List of active airlines in United States etc.
+
+val airlinesOperatedDF = """select ap.airport_id as airport_id,ap.country as country,y.airport_name as airport_name,y.airlines_list as airlines_list from open_flight.airline_airport_tbl ap join (select b.name as airport_name,collect_set(a.name) as airlines_list from open_flight.airline_airline_tbl a,Open_Flight.airline_airport_tbl b where a.country = b.country GROUP BY b.name) y on y.airport_name = ap.name """
+val airlinesoperated=hiveContext.sql(airlinesOperatedDF).withColumn("uniqueid", monotonically_increasing_id())
+airlinesoperated.show(20)
+
++----------+-------------+-----------------+-----------------+---------------+------+----------+--------------------+
+|airline_id|        alias|airline_iata_code|airline_icao_code|       callsign|active|   country|        airline_name|
++----------+-------------+-----------------+-----------------+---------------+------+----------+--------------------+
+|      1942|            N|               CY|              CYP|         CYPRUS|     Y|    Cyprus|[Cyprus Airways, ...|
+|     20923|       COBALT|             null|              FCB|         COBALT|     Y|    Cyprus|[Cyprus Airways, ...|
+|      2237|            N|               UI|              ECA|     EUROCYPRIA|     Y|    Cyprus|[Cyprus Airways, ...|
+|     13781|         null|               47|              VVN|           null|     Y|    Cyprus|[Cyprus Airways, ...|
+|      3329|            N|               LG|              LGL|         LUXAIR|     Y|Luxembourg|            [Luxair]|
+|      1548|            N|               FB|              LZB|FLYING BULGARIA|     Y|  Bulgaria|[Bulgaria Air, Wi...|
+|      5462|            N|               8Z|              WVL|        WIZZBUL|     Y|  Bulgaria|[Bulgaria Air, Wi...|
+|       695|            N|               VL|              VIM|           null|     Y|  Bulgaria|[Bulgaria Air, Wi...|
+|     17408|         null|               8B|              BCC|           null|     Y|  Thailand|[BusinessAir, Zen...|
+|     17935|       Zenith|               ZN|              ZNA|         ZENITH|     Y|  Thailand|[BusinessAir, Zen...|
+|      4889|            N|               T2|              TCG|     THAI CARGO|     Y|  Thailand|[BusinessAir, Zen...|
+|     19225|         null|               SL|                N|           null|     Y|  Thailand|[BusinessAir, Zen...|
+|      4940|            N|               TG|              THA|           THAI|     Y|  Thailand|[BusinessAir, Zen...|
+|      4947|Thai Air Asia|               FD|              AIQ|      THAI ASIA|     Y|  Thailand|[BusinessAir, Zen...|
+|      3674|            N|               DD|              NOK|        NOK AIR|     Y|  Thailand|[BusinessAir, Zen...|
+|      2429|            N|             null|              FYH|       FLY HIGH|     Y|  Thailand|[BusinessAir, Zen...|
+|      1422|            N|               PG|              BKP|    BANGKOK AIR|     Y|  Thailand|[BusinessAir, Zen...|
+|     13218|         null|               5E|                N|           SIAM|     Y|  Thailand|[BusinessAir, Zen...|
+|     21179|         null|             null|              TVJ|   THAIVIET JET|     Y|  Thailand|[BusinessAir, Zen...|
+|     20160|         null|               E8|              GTA|       CITY AIR|     Y|  Thailand|[BusinessAir, Zen...|
++----------+-------------+-----------------+-----------------+---------------+------+----------+--------------------+
+
+
+//f) List the airlines operated at any given airport
+
+val airlinesOperatedinCountriesDF = """select country,collect_set(name) as airlines_list from open_flight.airline_airline_tbl GROUP BY country"""
+val airlinesoperatedincountries = hiveContext.sql(airlinesOperatedinCountriesDF).withColumn("uniqueid", monotonically_increasing_id())
+airlinesoperatedincountries.show(20)
+
++----------+-------------+--------------------+--------------------+
+|airport_id|      country|        airport_name|       airlines_list|
++----------+-------------+--------------------+--------------------+
+|      2566|       Brazil|    Altamira Airport|[TAM Brazilian Ai...|
+|      5676|     Ethiopia|        Baco Airport|[Addis Air Cargo ...|
+|      3410|        Egypt|Borg El Arab Inte...|[Luxor Air, Natio...|
+|      9249|United States|  Brandywine Airport|[Trans Internatio...|
+|      7557|     Mongolia|      Bulgan Airport|[MIAT Mongolian A...|
+|      8234|     Colombia|   Capurganá Airport|[Arca Aerovias Co...|
+|     12018|    Australia|    Corryong Airport|[IPEC Aviation, A...|
+|      2139|         Iran|   Dayrestan Airport|[Bonyad Airlines,...|
+|      7063|United States|Devils Lake Regio...|[Trans Internatio...|
+|      1507|        Italy|Gioia Del Colle A...|[Aereonautica mil...|
+|     11084|United States|Guymon Municipal ...|[Trans Internatio...|
+|       426|      Finland|      Immola Airport|[Flybe Finland Oy...|
+|      5918|      Vanuatu|       Ipota Airport|       [Air Vanuatu]|
+|      1059| Sierra Leone|Lungi Internation...|[Aerolift Company...|
+|      4121|     Tanzania|Mafia Island Airport|[Kahama Mining Co...|
+|      1396|       France|Maubeuge-Élesmes ...|[FLowair Aviation...|
+|       832| South Africa|Morningside Farm ...|[Airquarius Air C...|
+|      8334|        Kenya|      Moyale Airport|[Boskovic Air Cha...|
+|      7596|     Kiribati|     Nikunau Airport|[Air Kiribati, Ai...|
+|      2029|  New Zealand| Paraparaumu Airport|[Aerial Surveys (...|
++----------+-------------+--------------------+--------------------+
+
+
+//g)List the airlines operated in most of the countries
+
+val listAirlineRoutesDF = """select al.name as airline_name,r.airline_id as airline_id ,collect_set (r.Source_airport) as source_airport,collect_set(r.destination_airport) as destination_airport,count(*) as count from open_flight.airline_airline_tbl al join open_flight.airline_route_tbl r on al.airline_id = r.airline_id GROUP BY al.name,r.airline_id ORDER BY count desc"""
+
+val listairlineroutes = hiveContext.sql(listAirlineRoutesDF).withColumn("uniqueid", monotonically_increasing_id())
+
+listairlineroutes.write.format("org.apache.spark.sql.cassandra").mode("append").options(Map("table" -> "listairlineroutes", "keyspace" -> "openflight")).save()
+
++---------------+--------------------+
+|        country|       airlines_list|
++---------------+--------------------+
+|         Cyprus|[Griffin Aviation...|
+|     Luxembourg|[Luxair, Luxaviat...|
+|       Bulgaria|[Vointeh, Bulgari...|
+|  Guinea-Bissau|[Air Luxor GB, Gu...|
+|       Thailand|[Si-Chang Flying ...|
+|      AIRFLIGHT|    [Alpha Aviation]|
+|     AEROPERLAS|[Aerolineas Pacif...|
+|        ANTARES|[Antares Airtrans...|
+|ATLANTIS CANADA|[Atlantis Transpo...|
+|        Iceland|[Jorvik, Icejet, ...|
+|         AVINOR|[Aviacion Del Nor...|
+|         Brunei|[Royal Brunei Air...|
+|         Mexico|[Vuelos Corporati...|
+|        Denmark|[Ikaros DK, Faroe...|
+|    ACTIVE AERO|[Active Aero Char...|
+|          Egypt|[Luxor Air, Natio...|
+|        Namibia|[Scenic Air, West...|
+|     AURORA AIR|   [Aurora Aviation]|
+|         Serbia|[Serbian Airlines...|
+|      Guatemala|[RACSA, Tikal Jet...|
++---------------+--------------------+
+
+
+i)List the airlines operates in most routes and least routes
+
+val listAirlineRoutesDF = """select al.name as airline_name,r.airline_id as airline_id ,collect_set (r.Source_airport) as source_airport,collect_set(r.destination_airport) as destination_airport,count(*) as count from open_flight.airline_airline_tbl al join open_flight.airline_route_tbl r on al.airline_id = r.airline_id GROUP BY al.name,r.airline_id ORDER BY count desc"""
+
+val listairlineroutes = hiveContext.sql(listAirlineRoutesDF).withColumn("uniqueid", monotonically_increasing_id())
+
+listairlineroutes.show(20)
+
++--------------------+----------+--------------------+--------------------+-----+
+|        airline_name|airline_id| source_airport	 | destination_airport|count|
++--------------------+----------+--------------------+--------------------+-----+
+|             Ryanair|      4296|[AAR, ACE, AGA, A...|[AGP, PMI, STN, B...| 2484|
+|   American Airlines|        24|[ABE, ABI, ABQ, A...|[CLT, PHL, DFW, L...| 2354|
+|     United Airlines|      5209|[ABE, ABJ, ABQ, A...|[ORD, BRU, LFW, O...| 2180|
+|     Delta Air Lines|      2009|[ABE, ABQ, ABR, A...|[ATL, DTW, MSP, S...| 1981|
+|          US Airways|      5265|[ABE, ABI, ABQ, A...|[CLT, PHL, DFW, L...| 1960|
+|China Southern Ai...|      1767|[AAT, ACX, AKL, A...|[URC, CAN, CTU, H...| 1454|
+|China Eastern Air...|      1758|[ACX, AKL, AMS, A...|[NAY, PVG, MEL, S...| 1263|
+|           Air China|       751|[ADD, AKL, AKU, A...|[CAN, PEK, PVG, C...| 1260|
+|  Southwest Airlines|      4547|[ABQ, ALB, AMA, A...|[BWI, DAL, DEN, H...| 1146|
+|             easyJet|      2297|[ABZ, ACE, ADB, A...|[LGW, LTN, LPL, C...| 1130|
+|          Air France|       137|[ABE, ABJ, ABQ, A...|[ATL, CDG, PHC, L...| 1071|
+|           Lufthansa|      3320|[ABJ, ABV, ABZ, A...|[BRU, LFW, OUA, F...|  923|
+|            Alitalia|       596|[AAL, ABJ, ABQ, A...|[AMS, CDG, ATL, F...|  877|
+|     Iberia Airlines|      2822|[AAL, ABZ, ACC, A...|[BCN, LHR, MAD, B...|  831|
+|KLM Royal Dutch A...|      3090|[AAL, ABE, ABQ, A...|[AMS, ATL, CDG, P...|  830|
+|   Shenzhen Airlines|      4611|[ADD, AKU, BAV, B...|[CAN, CTU, PEK, H...|  815|
+|          Air Berlin|       214|[ACE, AGP, ALC, A...|[CGN, DUS, FUE, H...|  798|
+|     AirTran Airways|      1316|[ABQ, ALB, AMA, A...|[DEN, LAS, MCI, M...|  726|
+|          Air Canada|       330|[ABJ, ADD, AMS, A...|[BRU, OUA, JED, C...|  705|
+|    Turkish Airlines|      4951|[AAL, ABJ, ACC, A...|[BLL, IST, ABJ, E...|  658|
++--------------------+----------+--------------------+--------------------+-----+
+
+SFO_Airport_system:
+
+1.
+List total no of passenger by month for particular year per geo_region
+
+val passengersbymonthDF = """select year as year,month as month,geo_region as geo_region,SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_data_tbl GROUP BY year,month,geo_region"""
+val passengersbymonth = hiveContext.sql(passengersbymonthDF).withColumn("uniqueid", monotonically_increasing_id())
+passengersbymonth.show(10)
+
+year    month   geo_region      num_psgr
+2005    August          Asia    356959
+2005    August          Australia / Oceania     26930
+2005    August          Canada  124737
+2005    August          Central America 12485
+2005    August          Europe  218223
+2005    August          Mexico  50628
+2005    August          US      2405904
+2005    December        Asia    321800
+2005    December        Australia / Oceania     34111
+2005    December        Canada  84853
+
+List total passenger count by operating airline
+
+val passengersbyairlineDF = "select operating_airline, SUM(passenger_count) as total_no_of_passengers from sfo_airport_system.sfo_passenger_Data_tbl GROUP BY operating_airline"
+val passengersbyairline = hiveContext.sql(passengersbyairlineDF).withColumn("uniqueid", monotonically_increasing_id())
+passengersbyairline.show(10)
+
+year    month   operating_airline       num_passenger
+2005    August          ATA Airlines    59719
+2005    August          Air Canada      68983
+2005    August          Air China       8127
+2005    August          Air France      22961
+2005    August          Air New Zealand 8678
+2005    August          AirTran Airways 15533
+2005    August          Alaska Airlines 118625
+2005    August          All Nippon Airways      12705
+2005    August          American Airlines       319764
+2005    August          American Eagle Airlines 10099
+
+
+2.
+List total landed weight by month for particular year per geo_region
+val landedWeightDF = """select year,month,geo_region,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY year,month,geo_Region"""
+val landedweight = hiveContext.sql(landedWeightDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+landedweight.show(10)
+
+year    month   geo_region      total_weight
+2005    August          Asia    468737650
+2005    August          Australia / Oceania     27720000
+2005    August          Canada  78893520
+2005    August          Central America 8816400
+2005    August          Europe  198450700
+2005    August          Mexico  25466000
+2005    August          US      1613740200
+2005    December        Asia    446276910
+2005    December        Australia / Oceania     37120000
+2005    December        Canada  68041880
+
+List total landed weight by operating airline, aircraft manufacture per year
+val WeightByAircraftDF = """select year,month,operating_airline,aircraft_manufacturer,SUM(total_landed_weight) as total_landed_weight from sfo_airport_system.sfo_landing_data_tbl GROUP BY year,month,operating_airline,aircraft_manufacturer"""
+val weightbyaircraft = hiveContext.sql(WeightByAircraftDF).withColumn("uniqueid", monotonically_increasing_id())
+weightbyaircraft.show(10)
+
+year    month   operating_airline       aircraft_manufacturer   total_weight
+2005    August          ABX Air McDonnell Douglas       4552000
+2005    August          ATA Airlines    Boeing  36356300
+2005    August          Air Canada      Airbus  41758020
+2005    August          Air China       Boeing  10080000
+2005    August          Air France      Boeing  18815700
+2005    August          Air New Zealand Boeing  8190000
+2005    August          AirTran Airways Boeing  7936000
+2005    August          Alaska Airlines Boeing  55504700
+2005    August          Alaska Airlines McDonnell Douglas       13000000
+2005    August          All Nippon Airways      Boeing  14260000
+
+3.
+List total cargo metric tons by month for particular year per geo_region
+
+val CargoMetricTonsDF = """select year,month,geo_region,SUM(cargo_metric_tons) as total_cargo_metric_tons from sfo_airport_system.sfo_cargo_data_tbl GROUP BY year,month,geo_region"""
+val cargometrictons = hiveContext.sql(CargoMetricTonsDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+cargometrictons.show(10)
+
+year    month   geo_region      total_weight
+2005    August          Asia    18891.719229
+2005    August          Australia / Oceania     621.8416008
+2005    August          Canada  189.475524
+2005    August          Central America 3.8560536
+2005    August          Europe  5611.6416384
+2005    August          Mexico  74.98008
+2005    August          US      21457.3361694
+2005    December        Asia    19175.8510954
+2005    December        Australia / Oceania     889.7377608
+2005    December        Canada  261.0390888
+
+List total cargo metric tons by operating airline
+val CargoMetricTonsByAirlineDF = """select year,month,operating_airline,SUM(cargo_metric_tons) as total_cargo_metric_tons from SFO_airport_system.SFO_Cargo_Data_Tbl GROUP BY year,month,operating_airline"""
+val cargometrictonsbyairline = hiveContext.sql(CargoMetricTonsByAirlineDF).withColumn("uniqueid", functions.monotonically_increasing_id())
+cargometrictonsbyairline.show(10)
+
+year    month   operating_airline       cargo_tons
+2005    August          ABX Air 408.5593344
+2005    August          ATA Airlines    195.2035848
+2005    August          Air Canada      109.9499184
+2005    August          Air China       497.998368
+2005    August          Air France      424.5051888
+2005    August          Air New Zealand 204.2297712
+2005    August          Alaska Airlines 298.101384
+2005    August          All Nippon Airways      623.9485728
+2005    August          American Airlines       2727.9708118
+2005    August          Ameriflight     30.1104216
+

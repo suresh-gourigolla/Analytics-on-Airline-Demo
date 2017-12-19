@@ -1,0 +1,231 @@
+SFO_Airport_System:
+###################
+add jar hdfs://sandbox.hortonworks.com:8020/hdp/apps/2.5.0.0-1245/hive/csv-serde-1.1.2.jar;
+SFO_cargo:
+***********
+use SFO_airport_system;
+CREATE TABLE IF NOT EXISTS SFO_Cargo_Data_Tbl_txt (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)
+,Operating_Airline_IATA_Code VARCHAR(15)
+,Published_Airline  VARCHAR(50)
+,Published_Airline_IATA_Code VARCHAR(15)
+,GEO_Summary  VARCHAR(50)
+,GEO_Region VARCHAR(50)
+,Activity_Type_Code CHAR(50)
+,Cargo_Type_Code VARCHAR(50)
+,Cargo_Aircraft_Type VARCHAR(50)
+,Cargo_Weight_LBS BIGINT
+,Cargo_Metric_TONS DECIMAL(38,20)
+,Year INT
+,Month CHAR(10))
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/'
+tblproperties("skip.header.line.count"="1");
+
+
+LOAD DATA INPATH '/hdp/Raw_Cargo_Data.csv' OVERWRITE INTO TABLE SFO_Cargo_Data_Tbl_txt;
+
+CREATE TABLE IF NOT EXISTS SFO_Cargo_Data_Tbl (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)
+,Operating_Airline_IATA_Code VARCHAR(15)
+,Published_Airline  VARCHAR(50)
+,Published_Airline_IATA_Code VARCHAR(15)
+,GEO_Summary  VARCHAR(50)
+,GEO_Region VARCHAR(50)
+,Activity_Type_Code CHAR(25)
+,Cargo_Type_Code VARCHAR(25)
+,Cargo_Aircraft_Type VARCHAR(50)
+,Cargo_Weight_LBS BIGINT
+,Cargo_Metric_TONS DECIMAL(38,20))
+PARTITIONED BY(Year INT,Month CHAR(10))
+CLUSTERED BY(GEO_Region) INTO 32 BUCKETS
+STORED AS TEXTFILE
+LOCATION '/user/susham/Hive/SFO/cargo';
+
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+set hive.enforce.bucketing = true; 
+set hive.exec.max.dynamic.partitions.pernode=10000;
+set hive.exec.max.dynamic.partitions=10000
+
+
+INSERT OVERWRITE TABLE SFO_Cargo_Data_Tbl PARTITION (Year,Month)
+SELECT 
+Activity_Period
+,Operating_Airline
+,Operating_Airline_IATA_Code
+,Published_Airline
+,Published_Airline_IATA_Code
+,GEO_Summary
+,GEO_Region
+,Activity_Type_Code
+,Cargo_Type_Code
+,Cargo_Aircraft_Type
+,Cargo_Weight_LBS
+,Cargo_Metric_TONS
+,Year 
+,Month from SFO_Cargo_Data_Tbl_txt;
+
+Landing data:
+=============
+CREATE TABLE IF NOT EXISTS SFO_Landing_Data_Tbl_txt (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)
+,Operating_Airline_IATA_Code VARCHAR(15)
+,Published_Airline  VARCHAR(50)
+,Published_Airline_IATA_Code VARCHAR(15)
+,GEO_Summary  VARCHAR(50)
+,GEO_Region VARCHAR(50)
+,Landing_Aircraft_Type CHAR(25)
+,Aircraft_Body_Type VARCHAR(50)
+,Aircraft_Manufacturer VARCHAR(50)
+,Aircraft_Model VARCHAR(50)
+,Aircraft_Version VARCHAR(50)
+,Landing_Count INT
+,Total_Landed_Weight BIGINT
+,Year INT
+,Month CHAR(10))
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/'
+tblproperties("skip.header.line.count"="1");
+
+LOAD DATA INPATH '/hdp/Raw_Landing_Data.csv' OVERWRITE INTO TABLE SFO_Landing_Data_Tbl_txt;
+
+
+
+CREATE TABLE IF NOT EXISTS SFO_Landing_Data_Tbl (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)
+,Operating_Airline_IATA_Code VARCHAR(15)
+,Published_Airline  VARCHAR(50)
+,Published_Airline_IATA_Code VARCHAR(15)
+,GEO_Summary  VARCHAR(50)
+,GEO_Region VARCHAR(50)
+,Landing_Aircraft_Type CHAR(25)
+,Aircraft_Body_Type VARCHAR(50)
+,Aircraft_Manufacturer VARCHAR(50)
+,Aircraft_Model VARCHAR(50)
+,Aircraft_Version VARCHAR(50)
+,Landing_Count INT
+,Total_Landed_Weight BIGINT)
+PARTITIONED BY(Year INT,Month CHAR(10))
+CLUSTERED BY(GEO_Region) INTO 32 BUCKETS
+STORED AS RCFILE
+LOCATION '/user/susham/Hive/SFO/landing';
+
+
+set hive.execution.engine=tez;
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+set hive.enforce.bucketing = true;
+INSERT OVERWRITE TABLE SFO_Landing_Data_Tbl PARTITION (Year,Month)
+SELECT 
+Activity_Period 
+,Operating_Airline
+,Operating_Airline_IATA_Code 
+,Published_Airline
+,Published_Airline_IATA_Code
+,GEO_Summary 
+,GEO_Region 
+,Landing_Aircraft_Type
+,Aircraft_Body_Type
+,Aircraft_Manufacturer
+,Aircraft_Model
+,Aircraft_Version
+,Landing_Count
+,Total_Landed_Weight
+,Year
+,Month from SFO_Landing_Data_Tbl_txt;
+
+Passenger data:
+---------------
+CREATE TABLE IF NOT EXISTS SFO_passenger_Data_Tbl_txt (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)              
+,Operating_Airline_IATA_Code  VARCHAR(15)
+,Published_Airline           VARCHAR(50)
+,Published_Airline_IATA_Code   VARCHAR(15)
+,GEO_Summary VARCHAR(50)
+,GEO_Region     VARCHAR(50)
+,Activity_Type_Code      VARCHAR(25)
+,Price_Category_Code   VARCHAR(25)
+,Terminal             VARCHAR(50)
+,Boarding_Area VARCHAR(25)
+,Passenger_Count           BIGINT
+,Adjusted_Activity_Type_Code VARCHAR(50)
+,Adjusted_Passenger_Count BIGINT        
+,Year      INT
+,Month CHAR(10))
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+    "separatorChar" = ",",
+    "quoteChar"     = "\""
+)
+STORED AS TEXTFILE
+LOCATION '/user/sushamdata/'
+tblproperties("skip.header.line.count"="1");
+
+LOAD DATA INPATH '/hdp/Raw_passenger_Data.csv' OVERWRITE INTO TABLE SFO_passenger_Data_Tbl_txt;
+
+CREATE TABLE IF NOT EXISTS SFO_passenger_Data_Tbl (
+Activity_Period INT
+,Operating_Airline VARCHAR(50)              
+,Operating_Airline_IATA_Code  VARCHAR(15)
+,Published_Airline           VARCHAR(50)
+,Published_Airline_IATA_Code   VARCHAR(15)
+,GEO_Summary VARCHAR(50)
+,GEO_Region     VARCHAR(50)
+,Activity_Type_Code      VARCHAR(25)
+,Price_Category_Code   VARCHAR(25)
+,Terminal             VARCHAR(50)
+,Boarding_Area VARCHAR(25)
+,Passenger_Count           BIGINT
+,Adjusted_Activity_Type_Code  VARCHAR(50)
+,Adjusted_Passenger_Count BIGINT)
+PARTITIONED BY(Year INT,Month CHAR(10))
+CLUSTERED BY(GEO_Region) INTO 32 BUCKETS
+STORED AS RCFILE
+LOCATION '/user/susham/Hive/SFO/passenger';
+
+
+use SFO_airport_system;
+set hive.execution.engine=tez;
+set hive.exec.dynamic.partition=true;
+set hive.exec.dynamic.partition.mode=nonstrict;
+set hive.enforce.bucketing = true; 
+
+INSERT OVERWRITE TABLE SFO_passenger_Data_Tbl PARTITION (Year,Month)
+SELECT 
+Activity_Period
+,Operating_Airline
+,Operating_Airline_IATA_Code
+,Published_Airline
+,Published_Airline_IATA_Code
+,GEO_Summary
+,GEO_Region
+,Activity_Type_Code      
+,Price_Category_Code
+,Terminal
+,Boarding_Area
+,Passenger_Count
+,Adjusted_Activity_Type_Code
+,Adjusted_Passenger_Count
+,Year
+,Month from SFO_passenger_Data_Tbl_txt;
+
+

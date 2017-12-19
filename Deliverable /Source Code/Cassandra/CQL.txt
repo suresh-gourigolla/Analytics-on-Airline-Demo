@@ -1,0 +1,74 @@
+CREATE KEYSPACE OpenFlight WITH replication ={'class':'SimpleStrategy','replication_factor' : 1};
+CREATE KEYSPACE sfo_airport WITH replication ={'class':'SimpleStrategy','replication_factor' : 1};
+
+CREATE TABLE openflight.airport(country  TEXT ,list_of_airports TEXT,uniqueid int PRIMARY KEY);
+
+CREATE TABLE OpenFlight.zeroStops(airline_id int,name TEXT ,alias TEXT,iata_code TEXT,icao_code TEXT,active TEXT,country TEXT,airline TEXT,source_airport TEXT,source_airport_id int,destination_airport TEXT,destination_airport_id int,stops int,uniqueid int PRIMARY KEY);
+
+CREATE TABLE OpenFlight.codeshare(airline_id int,name TEXT ,alias TEXT,iata_code TEXT,icao_code TEXT,active TEXT,country TEXT,airline TEXT,source_airport TEXT,source_airport_id int,destination_airport TEXT,destination_airport_id int,stops int, codeshare TEXT,uniqueid int PRIMARY KEY);
+
+
+
+Create Table OpenFlight.highestairports(airport_id int,name TEXT,city TEXT,iata_code TEXT,icao_code TEXT,latitude decimal,longitude decimal,altitude int,timezone int,dst TEXT,tz_database_time_zone TEXT,type TEXT,country TEXT ,airport_count int,uniqueid int PRIMARY KEY);
+
+
+
+CREATE TABLE OpenFlight.activeairlines(airline_id int, alias TEXT, iata_code TEXT, icao_code TEXT, callsign TEXT, active TEXT, country TEXT,airline_name TEXT,uniqueid int PRIMARY KEY);
+
+
+
+CREATE TABLE OpenFlight.airlinesoperated(airport_id int,country TEXT,airport_name TEXT,airlines_list TEXT,uniqueid int PRIMARY KEY );
+
+
+
+CREATE TABLE OpenFlight.airlinesoperatedincountries(country TEXT  ,airlines_list TEXT,uniqueid int PRIMARY KEY);
+
+
+
+CREATE TABLE OpenFlight.listairlineroutes(airline_name TEXT ,airline_id int,source_airport TEXT,destination_airport TEXT,count int,uniqueid int PRIMARY KEY);
+
+
+
+CREATE TABLE sfo_airport.passengersbyyear(year int,total_no_of_passengers int,uniqueid int PRIMARY KEY);
+
+
+
+CREATE TABLE sfo_airport.passengersbymonth (year int,month TEXT,geo_region TEXT,total_no_of_passengers int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.passengersbygeoregion ( geo_region TEXT,total_no_of_passengers int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.passengersbyairline (operating_airline TEXT, total_no_of_passengers int ,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.passengerairline (year int,month TEXT,operating_airline TEXT, total_no_of_passengers int ,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.landedweightbyyear (year int,total_landed_weight text,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.landedweight (year int,month TEXT,geo_region TEXT,total_landed_weight int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.landedweightbygeoregion (geo_region text,total_landed_weight int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.weightbyaircraft (year int,month TEXT,operating_airline TEXT,aircraft_manufacturer TEXT,total_landed_weight int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.cargobyyear (year int,total_cargo_metric_tons int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.cargometrictons (year int, month TEXT, geo_region TEXT,total_cargo_metric_tons int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.cargobygeoregion(geo_region text,total_cargo_metric_tons int,uniqueid int Primary Key);
+
+
+CREATE TABLE sfo_airport.cargometrictonsbyairline ( year int, month TEXT, operating_airline TEXT,total_cargo_metric_tons int,uniqueid int Primary Key);
+
+
+
+
+
